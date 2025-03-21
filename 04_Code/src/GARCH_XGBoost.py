@@ -34,8 +34,8 @@ forecast = res.forecast(start=train_df.index[-1], horizon=len(test_df), reindex=
 test_vol = np.sqrt(forecast.variance.values[-1, :]) / 10
 test_df["GARCH_vol"] = test_vol
 
-# 5) Feature-Erstellung für das ML-Modell: Für jeden Zeitpunkt ab window_size
-#    werden die letzten 'window_size' Renditen plus der GARCH-Volatilitätswert (am Zielzeitpunkt) als Feature genutzt.
+# 5) Features erstellen: Für jeden Zeitpunkt ab window_size werden die letzten 'window_size' Renditen
+# plus der GARCH-Volatilitätswert als zusätzliches Feature verwendet.
 def create_features_and_target(df, window_size=10):
     X, y = [], []
     returns = df["Return"].values
@@ -63,24 +63,20 @@ xgb_model = XGBRegressor(
 )
 xgb_model.fit(X_train, y_train)
 y_pred = xgb_model.predict(X_test)
-rmse = math.sqrt(mean_squared_error(y_test, y_pred))
-print(f"RMSE auf Renditen: {rmse:.4f}")
+rmse_returns = math.sqrt(mean_squared_error(y_test, y_pred))
+print(f"RMSE auf logarithmische Renditen: {rmse_returns:.4f}")
 
 # 7) Vorhergesagte Renditen in Aktienkurse umrechnen
-# Für jedes Sample in X_test entspricht y_test[i] dem logarithmischen Return an Tag t,
-# und der zugehörige Zeitpunkt in test_df ist test_df.index[i + window_size].
-# Um den vorhergesagten Kurs zu berechnen, nehmen wir den tatsächlichen Kurs des vorherigen Zeitpunkts und multiplizieren ihn mit exp(predicted return).
-
+# Für jedes Sample im Testbereich:
+# Der zugehörige Zeitpunkt im Test-DataFrame ist test_df.index[i + window_size].
 predicted_prices = []
 actual_prices = []
 
-# Für jedes Sample im Testbereich:
 for i, r_pred in enumerate(y_pred):
-    # Der Index im Test-DataFrame, der zum Target gehört:
-    target_idx = i + window_size
-    # Der vorherige reale Kurs (C_{t-1}) ist:
+    target_idx = i + window_size  # Zielindex im Test-DataFrame
+    # Vorheriger realer Kurs (C_{t-1})
     prev_price = test_df["Close"].iloc[target_idx - 1]
-    # Vorhergesagter Preis = vorheriger Preis * exp(vorhergesagter logarithmischer Return)
+    # Vorhergesagter Kurs = vorheriger Kurs * exp(vorhergesagter log Return)
     price_pred = prev_price * np.exp(r_pred)
     predicted_prices.append(price_pred)
     # Tatsächlicher Kurs zum Zeitpunkt t:
@@ -88,6 +84,10 @@ for i, r_pred in enumerate(y_pred):
 
 predicted_prices = np.array(predicted_prices)
 actual_prices = np.array(actual_prices)
+
+# RMSE auf Aktienkurs-Basis berechnen
+rmse_price = math.sqrt(mean_squared_error(actual_prices, predicted_prices))
+print(f"RMSE auf Aktienkurs-Basis: {rmse_price:.4f}")
 
 # 8) Plot 1: Vergleich der tatsächlichen vs. vorhergesagten logarithmischen Renditen
 plt.figure(figsize=(12,6))
