@@ -13,7 +13,7 @@ from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 # -----------------------------
 # 1) Daten einlesen & Renditen berechnen
 # -----------------------------
-df = pd.read_csv("../../03_Daten/processed_data/historical_stock_data_weekly_NVDA_flat.csv",
+df = pd.read_csv("../../03_Daten/processed_data/historical_stock_data_weekly_GOOG_flat.csv",
                  parse_dates=["Date"], index_col="Date")
 df.sort_index(inplace=True)
 # Berechne logarithmische Renditen (log-Return)

@@ -7,7 +7,7 @@ from sklearn.metrics import mean_squared_error
 import math
 
 # 1) Daten einlesen und Renditen berechnen
-df = pd.read_csv("../../03_Daten/processed_data/historical_stock_data_weekly_NVDA_flat.csv",
+df = pd.read_csv("../../03_Daten/processed_data/historical_stock_data_weekly_GOOG_flat.csv",
                  parse_dates=["Date"], index_col="Date")
 df.sort_index(inplace=True)
 # Berechne logarithmische Renditen
