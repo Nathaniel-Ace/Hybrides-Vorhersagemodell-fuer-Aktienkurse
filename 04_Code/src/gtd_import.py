@@ -2,13 +2,13 @@ import time
 from pytrends.request import TrendReq
 
 start_date = "2015-01-01"
-end_date = "2025-03-06"
+end_date = "2025-02-27"
 timeframe_str = f"{start_date} {end_date}"
 
 ticker_keywords = {
-    #"NVDA": ["NVIDIA stock", "buy NVIDIA stock", "sell NVIDIA stock", "NVIDIA earnings"],
-    #"GOOG": ["Google stock", "sell Google stock", "buy Google stock", "Alphabet stock", "Google earnings"],
-    "MSFT": ["Microsoft stock", "buy Microsoft stock", "sell Microsoft stock", "MSFT earnings", "Microsoft earnings"]
+    "NVDA": ["NVIDIA stock", "sell NVIDIA stock", "buy NVIDIA stock"],
+    "GOOG": ["Google stock", "sell Google stock", "buy Google stock"],
+    "MSFT": ["Microsoft stock", "sell Microsoft stock", "buy Microsoft stock"]
 }
 
 # Erstellen einer pytrends-Instanz
@@ -18,24 +18,28 @@ pytrends = TrendReq(hl="en-US", tz=360)
 for ticker, keywords in ticker_keywords.items():
     print(f"\nStarte Abruf der Google Trends Daten für {ticker}...")
 
-    df_all = None  # DataFrame, in dem die Zeitreihen-Daten aller Keywords speichern
+    df_all = None  # DataFrame, in dem die Zeitreihen-Daten aller Keywords gespeichert werden
     for keyword in keywords:
         print(f"  Abrufe Keyword: {keyword}")
         kw_list = [keyword]
         pytrends.build_payload(kw_list, cat=0, timeframe=timeframe_str, geo='', gprop='')
 
-        # Retry-Logik
+        # Retry-Logik mit exponentiellem Backoff
         max_retries = 3
         retry_count = 0
+        wait_time = 60  # Start-Wartezeit in Sekunden
+
         while retry_count < max_retries:
             try:
                 trends_data = pytrends.interest_over_time()
-                break  # Bei Erfolg
+                break  # Bei Erfolg Schleife verlassen
             except Exception as e:
                 retry_count += 1
                 print(
-                    f"    Fehler beim Abruf von '{keyword}': {e}. Warte 60 Sekunden, Versuch {retry_count} von {max_retries}...")
-                time.sleep(60)
+                    f"    Fehler beim Abruf von '{keyword}': {e}. Warte {wait_time} Sekunden, Versuch {retry_count} von {max_retries}..."
+                )
+                time.sleep(wait_time)
+                wait_time *= 2  # Wartezeit verdoppeln
         else:
             raise Exception(f"Mehrere Versuche für '{keyword}' fehlgeschlagen. Bitte überprüfen Sie Ihre Anfrage.")
 
@@ -50,10 +54,10 @@ for ticker, keywords in ticker_keywords.items():
         if df_all is None:
             df_all = trends_data[[f"{keyword}"]].copy()
         else:
-            # Merge: Zusammenführen an der Datumsspalte
+            # Merge: Zusammenführen an der Datumsspalte (Index)
             df_all = df_all.merge(trends_data[[f"{keyword}"]], left_index=True, right_index=True, how="outer")
 
-    # Resultate chronologisch sortieren
+    # Ergebnisse chronologisch sortieren
     df_all = df_all.sort_index()
     print(f"\nErste Zeilen der kombinierten Google Trends Daten für {ticker}:")
     print(df_all.head())
