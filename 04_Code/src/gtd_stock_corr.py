@@ -1,50 +1,42 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Liste der Ticker
 tickers = ["NVDA", "GOOG", "MSFT"]
 
 for ticker in tickers:
-    # Laden der geflatteten Aktienkursdaten
+    # 1) Aktiendaten (wöchentlich)
     stock_file = f"../../03_Daten/processed_data/historical_stock_data_weekly_{ticker}_flat.csv"
-    stock_df = pd.read_csv(stock_file, parse_dates=["Date"], index_col="Date")
-    stock_df.sort_index(inplace=True)
+    stock_df = pd.read_csv(stock_file, parse_dates=["Date"], index_col="Date").sort_index()
 
-    # Laden der Google Trends Daten für den jeweiligen Ticker
+    # Ermittel den Wochentag für das Resampling
+    first_wd = stock_df.index[0].dayofweek
+    weekday_map = {0: "MON", 1: "TUE", 2: "WED", 3: "THU", 4: "FRI", 5: "SAT", 6: "SUN"}
+    freq = f"W-{weekday_map[first_wd]}"  # z.B. "W-THU"
+
+    # 2) Monatliche Trends (monatsweise)
     trends_file = f"../../03_Daten/raw_data/google_trends_weekly_{ticker}.csv"
-    trends_df = pd.read_csv(trends_file, parse_dates=["date"], index_col="date")
-    trends_df.sort_index(inplace=True)
+    trends_df = pd.read_csv(trends_file, parse_dates=["date"], index_col="date").sort_index()
 
-    # Aggregation der Google Trends Daten:
-    # Berechnung des arithmetischen Mittelwerts über alle Spalten (Keywords)
-    trends_df["Trend_Average"] = trends_df.mean(axis=1)
+    # 3) Auf Wochenbasis resamplen & interpolieren
+    trends_weekly = (
+        trends_df
+        .resample(freq)  # z.B. "W-THU"
+        .interpolate(method="linear")
+        .loc[stock_df.index.min(): stock_df.index.max()]
+    )
 
-    # Glätten der Trend-Linie (z.B. gleitender Durchschnitt über 3 Zeitpunkte)
-    trends_df["Trend_Smoothed"] = trends_df["Trend_Average"].rolling(window=3).mean()
+    # 4) Jetzt erst aggregieren
+    trends_weekly["Trend_Average"] = trends_weekly.mean(axis=1)
+    trends_weekly["Trend_Smoothed"] = trends_weekly["Trend_Average"].rolling(3).mean()
 
-    # Anzeigen der ersten Zeilen der aggregierten Daten
-    print(f"\nErste Zeilen der aggregierten Google Trends Daten für {ticker}:")
-    print(trends_df.head())
+    # 5) Merge und Plot
+    merged = stock_df.join(trends_weekly[["Trend_Average", "Trend_Smoothed"]], how="inner")
 
-    # Plot 1: Schlusskurse und aggregierte Trend-Linie gemeinsam darstellen
     plt.figure(figsize=(12, 6))
-    plt.plot(stock_df.index, stock_df["Close"], label=f"{ticker} Schlusskurs", color="blue")
-    plt.plot(trends_df.index, trends_df["Trend_Average"], label="Trend Average", linestyle="--", color="orange",
-             alpha=0.8)
-    plt.plot(trends_df.index, trends_df["Trend_Smoothed"], label="Trend Smoothed", linestyle=":", color="green",
-             alpha=0.8)
+    plt.plot(merged.index, merged["Close"], label=f"{ticker} Schlusskurs")
+    plt.plot(merged.index, merged["Trend_Average"], "--", label="Trend Average")
+    plt.plot(merged.index, merged["Trend_Smoothed"], ":", label="Trend Smoothed")
+    plt.title(f"{ticker}: Wöchentliche Kurse vs. Trends")
     plt.xlabel("Datum")
-    plt.ylabel("Wert")
-    plt.title(f"{ticker}: Schlusskurs und Aggregierte Google Trends")
-    plt.legend()
-    plt.show()
-
-    # Plot 2: Separater Plot nur für die aggregierte Trend-Linie
-    plt.figure(figsize=(12, 4))
-    plt.plot(trends_df.index, trends_df["Trend_Average"], label="Trend Average", color="orange", linestyle="--")
-    plt.plot(trends_df.index, trends_df["Trend_Smoothed"], label="Trend Smoothed", color="green", linestyle=":")
-    plt.xlabel("Datum")
-    plt.ylabel("Suchinteresse")
-    plt.title(f"{ticker}: Aggregierte Google Trends Zeitreihe")
     plt.legend()
     plt.show()
