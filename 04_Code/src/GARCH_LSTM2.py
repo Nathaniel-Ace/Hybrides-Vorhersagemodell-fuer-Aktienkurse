@@ -39,7 +39,7 @@ window_size = 10
 
 
 # Funktion: Features (Fenster aus vergangenen Renditen + aktueller GARCH_vol) und Ziel (nächster Return) erstellen
-def create_features_and_target(df, window_size=10):
+def create_features_and_target(df, window_size=5):
     X, y = [], []
     returns = df["Return"].values
     vol = df["GARCH_vol"].values
@@ -115,6 +115,10 @@ for train_index, test_index in tscv.split(df):
         actual_prices.append(test_df["Close"].iloc[target_idx])
     predicted_prices = np.array(predicted_prices)
     actual_prices = np.array(actual_prices)
+
+    print("Time‑Stamps for predicted prices:\n", test_df.index[window_size:])
+    print("Lengths: len(predicted_prices) =", len(predicted_prices),
+          ", len(test_df.index[window_size:]) =", len(test_df.index[window_size:]))
 
     rmse_price = math.sqrt(mean_squared_error(actual_prices, predicted_prices))
     rmse_prices_list.append(rmse_price)
