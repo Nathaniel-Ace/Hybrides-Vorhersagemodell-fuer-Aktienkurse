@@ -38,7 +38,7 @@ def create_features_and_target(df, window_size=10):
 rmse_returns = []
 rmse_prices = []
 
-# Optional: letzten Fold fürs Plotten merken
+# letzten Fold fürs Plotten merken
 last_fold = None
 
 # 3) Cross‑Validation über Folds
