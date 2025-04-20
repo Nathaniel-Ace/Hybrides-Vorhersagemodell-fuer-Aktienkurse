@@ -1,43 +1,47 @@
 import pandas as pd
+from pandas.tseries.offsets import DateOffset
 
 # Liste der Ticker, für die die Daten zusammengeführt werden sollen
 tickers = ["NVDA", "GOOG", "MSFT"]
 
 for ticker in tickers:
-    # 1) Aktienkurs‑ und RSI‑Daten einlesen (wöchentlich)
+    # 1) Aktienkurs‑ & RSI‑Daten einlesen (wöchentlich)
     stock_path = f"../../03_Daten/processed_data/historical_stock_data_weekly_{ticker}_flat_with_RSI.csv"
-    stock_df = pd.read_csv(stock_path, parse_dates=["Date"], index_col="Date")
-    stock_df.sort_index(inplace=True)
-
-    # 2) Ermittlung des Wochentags (0=Montag ... 6=Sonntag)
-    # Verwende .dayofweek (int), nicht .weekday (Methode)
-    first_weekday = stock_df.index[0].dayofweek
-    weekday_map = {0: "MON", 1: "TUE", 2: "WED", 3: "THU", 4: "FRI", 5: "SAT", 6: "SUN"}
-    resample_freq = f"W-{weekday_map[first_weekday]}"
-    print(f"{ticker}: Aktiendaten indexieren auf Wochentag {weekday_map[first_weekday]} → Resample '{resample_freq}'")
-
-    # 3) Monatliche Google Trends‑Daten einlesen
-    trends_path = f"../../03_Daten/raw_data/google_trends_weekly_{ticker}.csv"
-    monthly_trends = pd.read_csv(trends_path, parse_dates=["date"], index_col="date")
-    monthly_trends.sort_index(inplace=True)
-
-    # 4) Resample auf den gleichen Wochentag wie die Aktiendaten und linear interpolieren
-    weekly_trends = (
-        monthly_trends
-        .resample(resample_freq)      # z. B. 'W-THU'
-        .interpolate(method="linear") # lineare Interpolation zwischen Monatswerten
-        .loc[stock_df.index.min():    # Zuschneiden auf exakt denselben Zeitraum
-             stock_df.index.max()]
+    stock_df = (
+        pd.read_csv(stock_path, parse_dates=["Date"], index_col="Date")
+          .sort_index()
     )
 
-    # 5) Merge der Aktien- und Trends‑Daten (inner join)
-    merged = stock_df.join(weekly_trends, how="inner")
+    # 2) Google Trends‑Daten einlesen (wöchentlich)
+    trends_path = f"../../03_Daten/raw_data/google_trends_weekly_{ticker}.csv"
+    trends_df = (
+        pd.read_csv(trends_path, parse_dates=["Date"], index_col="Date")
+          .sort_index()
+    )
 
-    # 6) Kurzer Kopfzeilen-Check
-    print(f"\n{ticker} – merged head:")
-    print(merged.head(), "\n")
+    # 3) Zeitraum auf die letzten 5 Jahre begrenzen
+    #    wir nehmen das jeweils früher endende Datum beider Datensätze als Obergrenze
+    end_date   = min(stock_df.index.max(), trends_df.index.max())
+    start_date = end_date - DateOffset(years=5)
+    stock_df   = stock_df.loc[start_date:end_date]
+    trends_df  = trends_df.loc[start_date:end_date]
 
-    # 7) Zusammengeführtes DataFrame speichern
-    out_path = f"../../03_Daten/processed_data/merged_weekly_{ticker}.csv"
+    # 4) Beide Indexe auf Wochenperioden (Mo–So) mappen
+    stock_df.index  = stock_df.index.to_period("W")
+    trends_df.index = trends_df.index.to_period("W")
+
+    # 5) Inner Join auf der Period‑Index‑Ebene
+    merged = stock_df.join(
+        trends_df,
+        how="inner",
+        lsuffix="",
+        rsuffix="_trend"
+    )
+
+    # 6) PeriodIndex zurück in Timestamps (Anfang der Woche = Montag)
+    merged.index = merged.index.to_timestamp()
+
+    # 7) Speichern
+    out_path = f"../../03_Daten/processed_data/merged_weekly_{ticker}_2020-2025.csv"
     merged.to_csv(out_path)
-    print(f"{ticker}: Fertig – '{out_path}' wurde erzeugt.\n")
+    print(f"{ticker}: Merged ({merged.shape[0]} Wochen) → {out_path}")
