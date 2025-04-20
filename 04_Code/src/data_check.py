@@ -13,7 +13,7 @@ for ticker in tickers:
     print(df.head())
 
 # Google Trends CSV einlesen (bleibt unverändert, da hier keine Anpassung nötig ist)
-trends_data = pd.read_csv("../../03_Daten/raw_data/google_trends_weekly.csv", parse_dates=['date'], index_col='date')
+trends_data = pd.read_csv("../../03_Daten/raw_data/google_trends_monthly.csv", parse_dates=['date'], index_col='date')
 print("\nGoogle Trends (head):")
 print(trends_data.head())
 
