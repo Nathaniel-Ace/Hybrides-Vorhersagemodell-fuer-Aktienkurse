@@ -1,7 +1,7 @@
 import time
 from pytrends.request import TrendReq
 
-start_date = "2015-01-01"
+start_date = "2020-01-02"
 end_date = "2025-02-27"
 timeframe_str = f"{start_date} {end_date}"
 
