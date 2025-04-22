@@ -1,7 +1,7 @@
 import pandas as pd
 
-ticker = "NVDA"
-gtd = "NVIDIA"
+ticker = "MSFT"
+gtd = "Microsoft"
 
 # 1) Pfade anpassen
 input_path = f"../../03_Daten/processed_data/merged_weekly_{ticker}.csv"
@@ -11,7 +11,7 @@ output_path = f"../../03_Daten/processed_data/merged_weekly_{ticker}_with_trends
 df = pd.read_csv(input_path, parse_dates=["Date"], index_col="Date")
 df.sort_index(inplace=True)
 
-# 3) Liste der GTD‑Spalten (hier für NVDA)
+# 3) Liste der GTD‑Spalten
 gtd_cols = [f"{gtd} stock", f"sell {gtd} stock", f"buy {gtd} stock"]
 
 # 4) Trend‑Durchschnitt und geglättete Trend‑Spalte berechnen
