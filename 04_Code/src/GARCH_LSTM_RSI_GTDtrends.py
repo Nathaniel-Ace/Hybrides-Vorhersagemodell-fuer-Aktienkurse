@@ -4,9 +4,12 @@ import math
 import matplotlib.pyplot as plt
 from arch import arch_model
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Input, LSTM, Dropout, Dense
+from tensorflow.keras.callbacks import EarlyStopping
 
 # Einstellungen
 ticker      = "NVDA"
@@ -14,117 +17,168 @@ window_size = 10
 n_splits    = 3
 csv_path    = f"../../03_Daten/processed_data/merged_weekly_{ticker}_with_trends.csv"
 
-# 1) Daten einlesen und Renditen berechnen
-df = pd.read_csv(csv_path, parse_dates=["Date"], index_col="Date")
-df.sort_index(inplace=True)
+# 1) Daten einlesen und Return + GARCH_vol berechnen
+df = pd.read_csv(csv_path, parse_dates=["Date"], index_col="Date").sort_index()
 df["Return"] = np.log(df["Close"] / df["Close"].shift(1))
 df.dropna(inplace=True)
 
-# 2) Cross‑Validation Setup
-tscv = TimeSeriesSplit(n_splits=n_splits)
-rmse_returns = []
-rmse_prices  = []
+# GARCH einmalig auf allen Daten fitten
+scaled_all = df["Return"] * 10
+garch_all  = arch_model(scaled_all, mean="Zero", vol="GARCH", p=1, q=1,
+                        dist="normal", rescale=False).fit(disp="off")
+df["GARCH_vol"] = garch_all.conditional_volatility / 10
 
-# 3) Feature‑Creator
-def create_features_and_target(df, window_size=10):
+# 2) Statistische Features skalieren & GTD-Spalten identifizieren
+static_cols = ["GARCH_vol", "RSI_14", "Trend_Average", "Trend_Smoothed"]
+print("Verwendete statische Features (GTD + RSI + GARCH):", static_cols)
+
+scaler = StandardScaler()
+df[static_cols] = scaler.fit_transform(df[static_cols])
+
+# 3) X/y Erzeuger
+def make_xy(df):
     X, y = [], []
     for i in range(window_size, len(df)):
-        # vergangene Renditen
-        ret_window = df["Return"].iloc[i-window_size:i].values.tolist()
-        # statische Features: GARCH_vol, RSI_14, Trend_Average, Trend_Smoothed
-        static_feats = df.loc[df.index[i], ["GARCH_vol","RSI_14","Trend_Average","Trend_Smoothed"]].values.tolist()
-        X.append(ret_window + static_feats)
-        y.append(df["Return"].iloc[i])
+        seq  = df["Return"].iloc[i-window_size:i].tolist()
+        stat = df[static_cols].iloc[i].tolist()
+        X.append(seq + stat)
+        y.append(df["Return"].iat[i])
     return np.array(X), np.array(y)
 
-# 4) Schleife über Folds
-last_fold_data = None
-fold = 1
-for train_idx, test_idx in tscv.split(df):
-    train_df = df.iloc[train_idx].copy()
-    test_df  = df.iloc[test_idx].copy()
+# 4) Hyperparameter‑Grid
+param_grid = {
+    "units":      [50],
+    "dropout":    [0.2],
+    "lr":         [1e-3, 5e-4],
+    "batch_size": [16]
+}
 
-    # 5) GARCH auf Trainingsdaten fitten
-    scaled = train_df["Return"] * 10
-    garch = arch_model(scaled, mean="Zero", vol="GARCH", p=1, q=1, dist="normal", rescale=False)
-    res   = garch.fit(disp="off")
-    train_df["GARCH_vol"] = res.conditional_volatility / 10
+tscv = TimeSeriesSplit(n_splits=n_splits)
+best_rmse, best_cfg = np.inf, None
 
-    # 6) Volatilitäts‑Forecast für den Testbereich
-    fc = res.forecast(start=train_df.index[-1], horizon=len(test_df), reindex=False)
-    test_df["GARCH_vol"] = np.sqrt(fc.variance.values[-1, :]) / 10
+# 5) Grid‑Search über Log‑Return‑RMSE
+for units in param_grid["units"]:
+    for drop in param_grid["dropout"]:
+        for lr in param_grid["lr"]:
+            for bs in param_grid["batch_size"]:
+                cv_rmses = []
+                for tr_idx, te_idx in tscv.split(df):
+                    train_df = df.iloc[tr_idx]
+                    test_df  = df.iloc[te_idx]
+                    X_tr, y_tr = make_xy(train_df)
+                    X_ts, y_ts = make_xy(test_df)
 
-    # 7) Features und Targets erzeugen
-    X_train, y_train = create_features_and_target(train_df, window_size)
-    X_test,  y_test  = create_features_and_target(test_df,  window_size)
+                    # Split Train/Val
+                    cut = int(len(X_tr) * 0.9)
+                    X_train, X_val = X_tr[:cut], X_tr[cut:]
+                    y_train, y_val = y_tr[:cut], y_tr[cut:]
 
-    # 8) Reshape für LSTM
-    X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
-    X_test  = X_test .reshape((X_test .shape[0], X_test .shape[1], 1))
+                    # reshape
+                    X_train = X_train.reshape((-1, X_train.shape[1], 1))
+                    X_val   = X_val.reshape((-1, X_val.shape[1], 1))
+                    X_test  = X_ts .reshape((-1, X_ts .shape[1], 1))
 
-    # 9) LSTM‑Modell definieren und trainieren
+                    # Modell
+                    model = Sequential([
+                        Input(shape=(X_train.shape[1],1)),
+                        LSTM(units, return_sequences=True),
+                        Dropout(drop),
+                        LSTM(units),
+                        Dropout(drop),
+                        Dense(1)
+                    ])
+                    opt = tf.keras.optimizers.Adam(learning_rate=lr)
+                    model.compile(optimizer=opt, loss="mse")
+                    es = EarlyStopping(monitor="val_loss", patience=3, restore_best_weights=True)
+                    model.fit(X_train, y_train,
+                              validation_data=(X_val, y_val),
+                              epochs=20, batch_size=bs,
+                              callbacks=[es], verbose=0)
+
+                    # Evaluation
+                    y_pred = model.predict(X_test).flatten()
+                    cv_rmses.append(math.sqrt(mean_squared_error(y_ts, y_pred)))
+
+                avg_rmse = np.mean(cv_rmses)
+                if avg_rmse < best_rmse:
+                    best_rmse, best_cfg = avg_rmse, {
+                        "units":units, "dropout":drop,
+                        "lr":lr, "batch_size":bs
+                    }
+
+print("\nBest CV‑RMSE (Log‑Renditen):", best_rmse)
+print("Best Config:", best_cfg)
+
+# 6) Endgültiges Training & pro-Fold‑RMSEs ausgeben
+fold_rmse_ret = []
+fold_rmse_prc = []
+fold_results  = []
+
+for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), 1):
+    train_df = df.iloc[tr_idx]
+    test_df  = df.iloc[te_idx]
+    X_tr, y_tr = make_xy(train_df)
+    X_ts, y_ts = make_xy(test_df)
+
+    # reshape
+    X_tr = X_tr.reshape((-1, X_tr.shape[1],1))
+    X_ts = X_ts.reshape((-1, X_ts.shape[1],1))
+
     model = Sequential([
-        Input(shape=(window_size + 4, 1)),
-        LSTM(50, return_sequences=True),
-        Dropout(0.2),
-        LSTM(50),
-        Dropout(0.2),
+        Input(shape=(X_tr.shape[1],1)),
+        LSTM(best_cfg["units"], return_sequences=True),
+        Dropout(best_cfg["dropout"]),
+        LSTM(best_cfg["units"]),
+        Dropout(best_cfg["dropout"]),
         Dense(1)
     ])
-    model.compile(optimizer="adam", loss="mean_squared_error")
-    model.fit(X_train, y_train, epochs=20, batch_size=16, validation_split=0.1, verbose=0)
+    model.compile(optimizer=tf.keras.optimizers.Adam(best_cfg["lr"]), loss="mse")
+    es = EarlyStopping(monitor="loss", patience=3, restore_best_weights=True)
+    model.fit(X_tr, y_tr, epochs=20,
+              batch_size=best_cfg["batch_size"],
+              callbacks=[es], verbose=0)
 
-    # 10) Vorhersage der log‑Renditen
-    y_pred = model.predict(X_test).flatten()
-    rm_ret = math.sqrt(mean_squared_error(y_test, y_pred))
-    rmse_returns.append(rm_ret)
+    # Vorhersage
+    y_pred = model.predict(X_ts).flatten()
+    rm_ret = math.sqrt(mean_squared_error(y_ts, y_pred))
+    fold_rmse_ret.append(rm_ret)
 
-    # 11) Rückrechnung in Aktienkurs‑Basis
+    # Rückrechnung Kurse
     preds, actuals = [], []
     for i, r in enumerate(y_pred):
-        idx = i + window_size
-        prev_price = test_df["Close"].iloc[idx-1]
-        price_pred = prev_price * np.exp(r)
-        preds.append(price_pred)
-        actuals.append(test_df["Close"].iloc[idx])
-    rm_price = math.sqrt(mean_squared_error(actuals, preds))
-    rmse_prices.append(rm_price)
+        p0 = test_df["Close"].iloc[i+window_size-1]
+        preds.append(p0 * np.exp(r))
+        actuals.append(test_df["Close"].iloc[i+window_size])
+    rm_prc = math.sqrt(mean_squared_error(actuals, preds))
+    fold_rmse_prc.append(rm_prc)
 
-    print(f"Fold {fold} – RMSE Log‑Renditen: {rm_ret:.4f}, RMSE Preise: {rm_price:.4f}")
+    print(f"Fold {fold}: RMSE Log‐Renditen = {rm_ret:.4f}, RMSE Preise = {rm_prc:.4f}")
 
-    # 12) Daten für letzten Fold merken
-    if fold == n_splits:
-        last_fold_data = {
-            "index":   test_df.index[window_size:],
-            "y_test":  y_test,
-            "y_pred":  y_pred,
-            "actuals": actuals,
-            "preds":   preds
-        }
-    fold += 1
+    fold_results.append({
+        "idx":      test_df.index[window_size:],
+        "y_test":   y_ts,
+        "y_pred":   y_pred,
+        "actuals":  actuals,
+        "preds":    preds
+    })
 
-# 13) Durchschnittliche RMSE ausgeben
-print(f"\nDurchschnittlicher RMSE Log‑Renditen: {np.mean(rmse_returns):.4f}")
-print(f"Durchschnittlicher RMSE Aktienkurse: {np.mean(rmse_prices):.4f}")
+# Durchschnitt über alle Folds
+print(f"\nDurchschn. RMSE Log‑Renditen: {np.mean(fold_rmse_ret):.4f}")
+print(f"Durchschn. RMSE Aktienkurse: {np.mean(fold_rmse_prc):.4f}")
 
-# 14) Plots für den letzten Fold
-if last_fold_data:
-    idx = last_fold_data["index"]
+# 7) Plots: alle Folds
+plt.figure(figsize=(12,5))
+for i, fr in enumerate(fold_results, 1):
+    plt.plot(fr["idx"], fr["y_test"],  label=f"Real Fold {i}", alpha=0.8)
+    plt.plot(fr["idx"], fr["y_pred"],  "--", label=f"Pred Fold {i}", alpha=0.8)
+plt.title(f"{ticker} – Log‑Renditen alle {n_splits} Folds")
+plt.xlabel("Datum"); plt.ylabel("Log‑Rendite")
+plt.legend(); plt.tight_layout(); plt.show()
 
-    plt.figure(figsize=(12,5))
-    plt.plot(idx, last_fold_data["y_test"],  label="Tatsächliche Log‑Renditen")
-    plt.plot(idx, last_fold_data["y_pred"],  label="Vorhergesagte Log‑Renditen", alpha=0.7)
-    plt.title("Letzter Fold – Log‑Renditen")
-    plt.xlabel("Datum")
-    plt.ylabel("Log‑Rendite")
-    plt.legend()
-    plt.show()
-
-    plt.figure(figsize=(12,5))
-    plt.plot(idx, last_fold_data["actuals"], label="Tatsächlicher Kurs")
-    plt.plot(idx, last_fold_data["preds"],   label="Vorhergesagter Kurs", alpha=0.7)
-    plt.title("Letzter Fold – Aktienkurse")
-    plt.xlabel("Datum")
-    plt.ylabel("Preis (Close)")
-    plt.legend()
-    plt.show()
+plt.figure(figsize=(12,5))
+for i, fr in enumerate(fold_results, 1):
+    plt.plot(fr["idx"], fr["actuals"], label=f"Real Fold {i}", alpha=0.8)
+    plt.plot(fr["idx"], fr["preds"],   "--", label=f"Pred Fold {i}", alpha=0.8)
+plt.title(f"{ticker} – Aktienkurse alle {n_splits} Folds")
+plt.xlabel("Datum"); plt.ylabel("Preis (Close)")
+plt.legend(); plt.tight_layout(); plt.show()
