@@ -7,7 +7,7 @@ from xgboost import XGBRegressor
 from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 from sklearn.metrics import mean_squared_error
 
-# ————— Einstellungen —————
+# Einstellungen
 ticker      = "NVDA"
 window_size = 10
 n_splits    = 3
