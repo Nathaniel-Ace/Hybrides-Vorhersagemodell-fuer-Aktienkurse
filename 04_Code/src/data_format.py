@@ -1,11 +1,11 @@
 import pandas as pd
 
 # csv_path = "../../03_Daten/raw_data/historical_stock_data_weekly_NVDA.csv"
-# csv_path = "../../03_Daten/raw_data/historical_stock_data_weekly_GOOG.csv"
-csv_path = "../../03_Daten/raw_data/historical_stock_data_weekly_MSFT.csv"
+csv_path = "../../03_Daten/raw_data/historical_stock_data_weekly_GOOG.csv"
+# csv_path = "../../03_Daten/raw_data/historical_stock_data_weekly_MSFT.csv"
 # output_path = "../../03_Daten/processed_data/historical_stock_data_weekly_NVDA_flat.csv"
-# output_path = "../../03_Daten/processed_data/historical_stock_data_weekly_GOOG_flat.csv"
-output_path = "../../03_Daten/processed_data/historical_stock_data_weekly_MSFT_flat.csv"
+output_path = "../../03_Daten/processed_data/historical_stock_data_weekly_GOOG_flat.csv"
+# output_path = "../../03_Daten/processed_data/historical_stock_data_weekly_MSFT_flat.csv"
 
 # 1) Einlesen mit Angabe, dass 2 Headerzeilen vorhanden sind und der Index die "Date"-Spalte ist
 df = pd.read_csv(csv_path, header=[0, 1], index_col=0)

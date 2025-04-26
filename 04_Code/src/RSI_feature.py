@@ -17,11 +17,11 @@ def compute_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
 
 # Pfad zur geflatteten CSV
 #infile = "../../03_Daten/processed_data/historical_stock_data_weekly_NVDA_flat.csv"
-#infile = "../../03_Daten/processed_data/historical_stock_data_weekly_GOOG_flat.csv"
-infile = "../../03_Daten/processed_data/historical_stock_data_weekly_MSFT_flat.csv"
+infile = "../../03_Daten/processed_data/historical_stock_data_weekly_GOOG_flat.csv"
+#infile = "../../03_Daten/processed_data/historical_stock_data_weekly_MSFT_flat.csv"
 #outfile = "../../03_Daten/processed_data/historical_stock_data_weekly_NVDA_flat_with_RSI.csv"
-#outfile = "../../03_Daten/processed_data/historical_stock_data_weekly_GOOG_flat_with_RSI.csv"
-outfile = "../../03_Daten/processed_data/historical_stock_data_weekly_MSFT_flat_with_RSI.csv"
+outfile = "../../03_Daten/processed_data/historical_stock_data_weekly_GOOG_flat_with_RSI.csv"
+#outfile = "../../03_Daten/processed_data/historical_stock_data_weekly_MSFT_flat_with_RSI.csv"
 
 # CSV einlesen
 df = pd.read_csv(infile, parse_dates=["Date"], index_col="Date")
