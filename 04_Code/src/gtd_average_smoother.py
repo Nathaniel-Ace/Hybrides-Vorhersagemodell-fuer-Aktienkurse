@@ -4,8 +4,8 @@ ticker = "MSFT"
 gtd = "Microsoft"
 
 # 1) Pfade anpassen
-input_path = f"../../03_Daten/processed_data/merged_weekly_{ticker}.csv"
-output_path = f"../../03_Daten/processed_data/merged_weekly_{ticker}_with_trends.csv"
+input_path = f"../../03_Daten/processed_data/merged_weekly_{ticker}_2015-2025.csv"
+output_path = f"../../03_Daten/processed_data/merged_weekly_{ticker}_2015-2025_with_trends.csv"
 
 # 2) CSV einlesen (Datum als Index)
 df = pd.read_csv(input_path, parse_dates=["Date"], index_col="Date")

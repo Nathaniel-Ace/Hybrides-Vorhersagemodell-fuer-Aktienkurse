@@ -15,7 +15,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 ticker      = "NVDA"
 window_size = 10
 n_splits    = 3
-csv_path    = f"../../03_Daten/processed_data/merged_weekly_{ticker}_with_trends.csv"
+csv_path    = f"../../03_Daten/processed_data/merged_weekly_{ticker}_2015-2025_with_trends.csv"
 
 # 1) Daten einlesen und Return + GARCH_vol berechnen
 df = pd.read_csv(csv_path, parse_dates=["Date"], index_col="Date").sort_index()
@@ -30,7 +30,7 @@ df["GARCH_vol"] = garch_all.conditional_volatility / 10
 
 # 2) Statistische Features skalieren & GTD-Spalten identifizieren
 static_cols = ["GARCH_vol", "RSI_14", "Trend_Average", "Trend_Smoothed"]
-print("Verwendete statische Features (GTD + RSI + GARCH):", static_cols)
+print("Verwendete statische Features:", static_cols)
 
 scaler = StandardScaler()
 df[static_cols] = scaler.fit_transform(df[static_cols])
