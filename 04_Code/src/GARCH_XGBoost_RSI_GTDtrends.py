@@ -12,7 +12,7 @@ from sklearn.metrics import mean_squared_error
 ticker       = "NVDA"
 window_size  = 10
 n_splits     = 3
-csv_path     = f"../../03_Daten/processed_data/merged_weekly_{ticker}_with_trends.csv"
+csv_path     = f"../../03_Daten/processed_data/merged_weekly_{ticker}_2015-2025_with_trends.csv"
 
 # 1) Daten einlesen und Log-Renditen berechnen
 df = (

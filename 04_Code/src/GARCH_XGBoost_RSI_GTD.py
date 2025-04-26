@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 ticker      = "NVDA"
 window_size = 10
 n_splits    = 3
-csv_path    = f"../../03_Daten/processed_data/merged_weekly_{ticker}.csv"
+csv_path    = f"../../03_Daten/processed_data/merged_weekly_{ticker}_2015-2025.csv"
 
 # 1) Daten einlesen und Log-Renditen berechnen
 df = pd.read_csv(csv_path, parse_dates=["Date"], index_col="Date").sort_index()
