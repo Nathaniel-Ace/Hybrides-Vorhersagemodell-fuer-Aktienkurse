@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 from arch import arch_model
 from xgboost import XGBRegressor
 from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
-# ————— Einstellungen —————
+# Einstellungen
 ticker      = "NVDA"
 window_size = 10
 n_splits    = 3
@@ -25,17 +25,21 @@ g = arch_model(df["Return"] * 10, mean="Zero", vol="GARCH", p=1, q=1,
 res_all = g.fit(disp="off")
 df["GARCH_vol"] = res_all.conditional_volatility / 10
 
-# 3) Statische Feature-Spalten ermitteln
-gtd_cols     = [c for c in df.columns if "stock" in c.lower()]
-static_cols  = ["GARCH_vol", "RSI_14"] + gtd_cols
+# 3) Statische Feature-Spalten ermitteln und skalieren
+gtd_cols    = [c for c in df.columns if "stock" in c.lower()]
+static_cols = ["GARCH_vol", "RSI_14"] + gtd_cols
+print("Verwendete statische Features (GTD + RSI + GARCH):", static_cols)
 
-# 4) Funktion zum Erzeugen von X,y
+scaler = StandardScaler()
+df[static_cols] = scaler.fit_transform(df[static_cols])
+
+# 4) Funktion zum Erzeugen von X, y
 def make_xy(subdf):
     X, y = [], []
     rets = subdf["Return"].values
     for i in range(window_size, len(subdf)):
-        seq   = list(rets[i-window_size:i])                   # letzte Log-Renditen
-        stat  = subdf[static_cols].iloc[i].values.tolist()     # GARCH_vol, RSI, GTD
+        seq  = list(rets[i-window_size:i])                   # letzte Log-Renditen
+        stat = subdf[static_cols].iloc[i].values.tolist()     # GARCH_vol, RSI, GTD
         X.append(seq + stat)
         y.append(rets[i])
     return np.array(X), np.array(y)
@@ -43,7 +47,7 @@ def make_xy(subdf):
 # 5) Hyperparameter-Suche für XGBoost
 X_full, y_full = make_xy(df)
 
-tscv = TimeSeriesSplit(n_splits=n_splits)
+tscv_search = TimeSeriesSplit(n_splits=n_splits)
 param_dist = {
     "n_estimators":    [50, 100, 200],
     "max_depth":       [3, 5, 7],
@@ -52,21 +56,26 @@ param_dist = {
     "colsample_bytree":[0.8, 1.0],
     "gamma":           [0, 0.1, 0.5]
 }
-xgb = XGBRegressor(random_state=42, tree_method="hist")
+xgb = XGBRegressor(random_state=42, tree_method="exact")
 search = RandomizedSearchCV(
     xgb, param_dist,
-    n_iter=20, cv=tscv,
+    n_iter=20, cv=tscv_search,
     scoring="neg_root_mean_squared_error",
-    n_jobs=-1, random_state=42, verbose=1
+    n_jobs=-1, random_state=42, verbose=1,
+    error_score='raise'
 )
 search.fit(X_full, y_full)
 best_params = search.best_params_
 print(">>> Best XGBoost Params:", best_params)
 
-# 6) Out-of-Sample-Evaluation mit Early-Stopping
-rmse_ret   = []
-rmse_price = []
-last_fold  = {}
+# 6) Out-of-Sample-Evaluation & Metriken
+tscv = TimeSeriesSplit(n_splits=n_splits)
+rmse_ret, mae_ret, mape_ret, r2_ret = [], [], [], []
+hit_ret, sharpe_ret               = [], []
+rmse_prc, mae_prc, mape_prc, r2_prc = [], [], [], []
+hit_prc, sharpe_prc               = [], []
+
+last_fold = {}
 
 for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
     train_df = df.iloc[tr_idx].copy()
@@ -77,8 +86,7 @@ for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
     test_df["GARCH_vol"] = np.sqrt(fc.variance.values[-1, :]) / 10
 
     # b) Skalierung der statischen Features
-    scaler = StandardScaler()
-    train_df[static_cols] = scaler.fit_transform(train_df[static_cols])
+    train_df[static_cols] = scaler.transform(train_df[static_cols])
     test_df[static_cols]  = scaler.transform(test_df[static_cols])
 
     # c) Features/Targets
@@ -86,7 +94,7 @@ for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
     X_test,  y_test  = make_xy(test_df)
     print(f"Fold {fold}: X_train={X_train.shape}, X_test={X_test.shape}")
 
-    # d) Finales Training mit Early Stopping auf Test-Set
+    # d) Model trainieren mit Early Stopping
     model = XGBRegressor(
         **best_params,
         random_state=42,
@@ -100,21 +108,51 @@ for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
         verbose=False
     )
 
-    # e) Vorhersage & RMSE auf Log-Renditen
+    # e) Log-Return Metriken
     y_pred = model.predict(X_test)
-    r_ret  = math.sqrt(mean_squared_error(y_test, y_pred))
-    rmse_ret.append(r_ret)
+    rm = math.sqrt(mean_squared_error(y_test, y_pred))
+    ma = mean_absolute_error(y_test, y_pred)
+    mask_r = y_test != 0
+    mp = np.mean(np.abs((y_test[mask_r] - y_pred[mask_r]) / y_test[mask_r])) * 100
+    r2 = r2_score(y_test, y_pred)
+    dir_true = np.sign(np.diff(y_test))
+    dir_pred = np.sign(np.diff(y_pred))
+    hr = (dir_true == dir_pred).mean() * 100
+    rr = np.diff(y_pred) / y_pred[:-1]
+    sr = rr.mean() / (rr.std() if rr.std() != 0 else np.nan)
 
-    # f) Rückrechnung auf Kursbasis & RMSE Preise
+    rmse_ret.append(rm); mae_ret.append(ma)
+    mape_ret.append(mp); r2_ret.append(r2)
+    hit_ret.append(hr); sharpe_ret.append(sr)
+
+    # f) Preis-Metriken
     preds, actuals = [], []
     for i, r in enumerate(y_pred):
         p0 = test_df["Close"].iat[i + window_size - 1]
         preds.append(p0 * np.exp(r))
         actuals.append(test_df["Close"].iat[i + window_size])
-    r_price = math.sqrt(mean_squared_error(actuals, preds))
-    rmse_price.append(r_price)
+    preds = np.array(preds); actuals = np.array(actuals)
 
-    print(f"Fold {fold}: RMSE_Returns={r_ret:.4f}, RMSE_Prices={r_price:.4f}")
+    rm_p = math.sqrt(mean_squared_error(actuals, preds))
+    ma_p = mean_absolute_error(actuals, preds)
+    mask_p = actuals != 0
+    mp_p = np.mean(np.abs((actuals[mask_p] - preds[mask_p]) / actuals[mask_p])) * 100
+    r2_p = r2_score(actuals, preds)
+    dir_tp = np.sign(np.diff(actuals))
+    dir_pp = np.sign(np.diff(preds))
+    hr_p = (dir_tp == dir_pp).mean() * 100
+    rp = np.diff(preds) / preds[:-1]
+    sr_p = rp.mean() / (rp.std() if rp.std() != 0 else np.nan)
+
+    rmse_prc.append(rm_p); mae_prc.append(ma_p)
+    mape_prc.append(mp_p); r2_prc.append(r2_p)
+    hit_prc.append(hr_p); sharpe_prc.append(sr_p)
+
+    print(f"Fold {fold}:")
+    print(f"  Returns → RMSE={rm:.4f}, MAE={ma:.4f}, MAPE={mp:.2f}%, "
+          f"R²={r2:.4f}, Hit-Rate={hr:.1f}%, Sharpe={sr:.4f}")
+    print(f"  Prices  → RMSE={rm_p:.4f}, MAE={ma_p:.4f}, MAPE={mp_p:.2f}%, "
+          f"R²={r2_p:.4f}, Hit-Rate={hr_p:.1f}%, Sharpe={sr_p:.4f}\n")
 
     if fold == n_splits:
         last_fold = {
@@ -126,21 +164,34 @@ for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
         }
 
 # 7) Durchschnittsergebnisse
-print("\n--- Durchschnitt über alle Folds ---")
-print("Log-Renditen RMSE:", np.mean(rmse_ret))
-print("Aktienkurse RMSE:", np.mean(rmse_price))
+print("\n=== Durchschnittliche Metriken: Log-Renditen ===")
+print(f"RMSE    = {np.mean(rmse_ret):.4f}")
+print(f"MAE     = {np.mean(mae_ret):.4f}")
+print(f"MAPE    = {np.mean(mape_ret):.2f}%")
+print(f"R²      = {np.mean(r2_ret):.4f}")
+print(f"HitRate = {np.mean(hit_ret):.2f}%")
+print(f"Sharpe  = {np.nanmean(sharpe_ret):.4f}")
+
+print("\n=== Durchschnittliche Metriken: Preise ===")
+print(f"RMSE    = {np.mean(rmse_prc):.4f}")
+print(f"MAE     = {np.mean(mae_prc):.4f}")
+print(f"MAPE    = {np.mean(mape_prc):.2f}%")
+print(f"R²      = {np.mean(r2_prc):.4f}")
+print(f"HitRate = {np.mean(hit_prc):.2f}%")
+print(f"Sharpe  = {np.nanmean(sharpe_prc):.4f}")
 
 # 8) Plots für den letzten Fold
 if last_fold:
     idx = last_fold["idx"]
+
     plt.figure(figsize=(12,5))
-    plt.plot(idx, last_fold["y_test"], label="Real Log-Renditen")
+    plt.plot(idx, last_fold["y_test"],  label="Real Log-Renditen")
     plt.plot(idx, last_fold["y_pred"], "--", label="Pred Log-Renditen", alpha=0.7)
     plt.title(f"{ticker} – Fold {n_splits} Log-Renditen")
     plt.xlabel("Datum"); plt.ylabel("Log-Rendite"); plt.legend(); plt.show()
 
     plt.figure(figsize=(12,5))
     plt.plot(idx, last_fold["actual"], label="Real Close")
-    plt.plot(idx, last_fold["preds"],   "--", label="Pred Close", alpha=0.7)
+    plt.plot(idx, last_fold["preds"],  "--", label="Pred Close", alpha=0.7)
     plt.title(f"{ticker} – Fold {n_splits} Aktienkurse")
     plt.xlabel("Datum"); plt.ylabel("Preis (Close)"); plt.legend(); plt.show()
