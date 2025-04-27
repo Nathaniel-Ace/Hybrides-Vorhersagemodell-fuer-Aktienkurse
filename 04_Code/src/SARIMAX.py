@@ -1,7 +1,8 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import math
 
 # Liste der Ticker und Pfade zu den wöchentlichen CSVs
@@ -29,25 +30,42 @@ for ticker in tickers:
 
     # 4) Forecast für den Test-Zeitraum
     forecast = fit.forecast(steps=len(test))
-    forecast.index = test.index
+    forecast.index = test.index  # Indizes angleichen
 
-    # 5) RMSE-Berechnung
-    rmse = math.sqrt(mean_squared_error(test["Close"], forecast))
-    results.append({"Ticker": ticker, "RMSE_SARIMAX": rmse})
-    print(f"{ticker} – SARIMAX RMSE: {rmse:.4f}")
+    # 5) Fehler-Metriken berechnen
+    actual = test["Close"]
+    rmse  = math.sqrt(mean_squared_error(actual, forecast))
+    mae   = mean_absolute_error(actual, forecast)
+    mape  = np.mean(np.abs((actual - forecast) / actual)) * 100
+    r2    = r2_score(actual, forecast)
+
+    results.append({
+        "Ticker":       ticker,
+        "RMSE":         rmse,
+        "MAE":          mae,
+        "MAPE_%":       mape,
+        "R2":           r2
+    })
+
+    print(f"{ticker} – SARIMAX Metriken:")
+    print(f"  RMSE       = {rmse:.4f}")
+    print(f"  MAE        = {mae:.4f}")
+    print(f"  MAPE       = {mape:.2f}%")
+    print(f"  R²         = {r2:.4f}\n")
 
     # 6) Plot: Train / Test / Forecast
     plt.figure(figsize=(12, 5))
-    plt.plot(train.index, train["Close"], label="Train (Close)", color="gray")
-    plt.plot(test.index, test["Close"], label="Test (Close)", color="black")
-    plt.plot(forecast.index, forecast, label="SARIMAX Forecast", alpha=0.8)
-    plt.title(f"{ticker}: SARIMAX(1,1,1)x(1,1,1,52) Forecast")
+    plt.plot(train.index, train["Close"], label="Train", color="gray")
+    plt.plot(test.index, actual,           label="Test",  color="black")
+    plt.plot(forecast.index, forecast,     label="Forecast", alpha=0.8)
+    plt.title(f"{ticker}: SARIMAX(1,1,1)x(1,1,1,52) — Forecast vs. Actual")
     plt.xlabel("Datum")
     plt.ylabel("Close Price")
     plt.legend()
+    plt.tight_layout()
     plt.show()
 
-# 7) Zusammenfassung aller RMSE
+# 7) Zusammenfassung aller RMSE, MAE, MAPE, R²
 df_results = pd.DataFrame(results)
-print("\n=== SARIMAX-Ergebnisse ===")
+print("\n=== Zusammenfassung SARIMAX Metriken ===")
 print(df_results.to_string(index=False))
