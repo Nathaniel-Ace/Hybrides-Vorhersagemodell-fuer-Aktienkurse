@@ -31,9 +31,9 @@ for ticker in tickers:
     # 4) Forecast für Test-Zeitraum
     forecast = fit.forecast(steps=len(test))
     forecast.index = test.index
+    actual = test["Close"]
 
     # 5) Basis-Metriken
-    actual = test["Close"]
     rmse  = math.sqrt(mean_squared_error(actual, forecast))
     mae   = mean_absolute_error(actual, forecast)
     mape  = np.mean(np.abs((actual - forecast) / actual)) * 100
@@ -43,25 +43,35 @@ for ticker in tickers:
     forecast_ret = forecast.pct_change().dropna()
     sharpe = forecast_ret.mean() / forecast_ret.std()
 
-    # in Liste speichern
+    # 7) Hit-Rate (Vorzeichenkorrektheit)
+    actual_ret = actual.pct_change().dropna()
+    forecast_ret = forecast.pct_change().dropna()
+    min_len = min(len(actual_ret), len(forecast_ret))
+    hitrate = np.mean(
+        np.sign(actual_ret[-min_len:].values) == np.sign(forecast_ret[-min_len:].values)
+    ) * 100
+
+    # 8) Ergebnisse speichern
     results.append({
         "Ticker": ticker,
         "RMSE":   rmse,
         "MAE":    mae,
         "MAPE_%": mape,
         "R2":     r2,
+        "HitRate": hitrate,
         "Sharpe": sharpe
     })
 
-    # Ausgabe
+    # 9) Einzel-Ausgabe
     print(f"{ticker} – SARIMAX Metriken:")
     print(f"  RMSE       = {rmse:.4f}")
     print(f"  MAE        = {mae:.4f}")
     print(f"  MAPE       = {mape:.2f}%")
     print(f"  R²         = {r2:.4f}")
+    print(f"  Hit-Rate   = {hitrate:.2f}%")
     print(f"  Sharpe     = {sharpe:.4f}\n")
 
-    # 7) Plot: Train / Test / Forecast
+    # 10) Plot: Train / Test / Forecast
     plt.figure(figsize=(12, 5))
     plt.plot(train.index, train["Close"], label="Train", color="gray")
     plt.plot(test.index, actual,           label="Test",  color="black")
@@ -73,7 +83,7 @@ for ticker in tickers:
     plt.tight_layout()
     plt.show()
 
-# 8) Zusammenfassung aller Metriken
+# 11) Zusammenfassung aller Metriken
 df_results = pd.DataFrame(results)
 print("\n=== Zusammenfassung SARIMAX Metriken ===")
-print(df_results.to_string(index=False))
+print(df_results.round(4).to_string(index=False))
