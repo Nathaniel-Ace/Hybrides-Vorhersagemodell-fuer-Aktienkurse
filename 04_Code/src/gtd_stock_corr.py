@@ -1,42 +1,49 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-tickers = ["NVDA", "GOOG", "MSFT"]
+# Ticker-konfiguration
+ticker_files = {
+    "NVDA": {
+        "file": "../../03_Daten/processed_data/merged_weekly_NVDA_2015-2025.csv",
+        "gtd": ["NVIDIA stock", "buy NVIDIA stock", "sell NVIDIA stock"]
+    },
+    "GOOG": {
+        "file": "../../03_Daten/processed_data/merged_weekly_GOOG_2015-2025.csv",
+        "gtd": ["Google stock", "buy Google stock", "sell Google stock"]
+    },
+    "MSFT": {
+        "file": "../../03_Daten/processed_data/merged_weekly_MSFT_2015-2025.csv",
+        "gtd": ["Microsoft stock", "buy Microsoft stock", "sell Microsoft stock"]
+    },
+}
 
-for ticker in tickers:
-    # 1) Aktiendaten (wöchentlich)
-    stock_file = f"../../03_Daten/processed_data/historical_stock_data_weekly_{ticker}_flat.csv"
-    stock_df = pd.read_csv(stock_file, parse_dates=["Date"], index_col="Date").sort_index()
+for ticker, cfg in ticker_files.items():
+    df = pd.read_csv(cfg["file"], parse_dates=["Date"], index_col="Date").sort_index()
 
-    # Ermittel den Wochentag für das Resampling
-    first_wd = stock_df.index[0].dayofweek
-    weekday_map = {0: "MON", 1: "TUE", 2: "WED", 3: "THU", 4: "FRI", 5: "SAT", 6: "SUN"}
-    freq = f"W-{weekday_map[first_wd]}"  # z.B. "W-THU"
+    # 4-Wochen-Rolling-Mean der GTD
+    df_roll = df[cfg["gtd"]].rolling(window=4, min_periods=1).mean()
 
-    # 2) Monatliche Trends (monatsweise)
-    trends_file = f"../../03_Daten/raw_data/google_trends_weekly_{ticker}.csv"
-    trends_df = pd.read_csv(trends_file, parse_dates=["date"], index_col="date").sort_index()
+    # Plot
+    fig, ax1 = plt.subplots(figsize=(12, 5))
+    ax1.plot(df.index, df["Close"], color="tab:blue", linewidth=2, label="Close Price")
+    ax1.set_xlabel("Datum")
+    ax1.set_ylabel("Close Price", color="tab:blue")
+    ax1.tick_params(axis="y", labelcolor="tab:blue")
 
-    # 3) Auf Wochenbasis resamplen & interpolieren
-    trends_weekly = (
-        trends_df
-        .resample(freq)  # z.B. "W-THU"
-        .interpolate(method="linear")
-        .loc[stock_df.index.min(): stock_df.index.max()]
-    )
+    ax2 = ax1.twinx()
+    styles = ["--", "-.", ":"]
+    for col, ls in zip(cfg["gtd"], styles):
+        ax2.plot(df_roll.index, df_roll[col],
+                 linestyle=ls, alpha=0.8, label=f"{col} (4-Wochen MA)")
+    ax2.set_ylabel("Google Trends (4-Wochen gleitend)")
 
-    # 4) Jetzt erst aggregieren
-    trends_weekly["Trend_Average"] = trends_weekly.mean(axis=1)
-    trends_weekly["Trend_Smoothed"] = trends_weekly["Trend_Average"].rolling(3).mean()
+    # Legenden an getrennten Ecken
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+    ax1.legend(h1, l1, loc="upper left")
+    ax2.legend(h2, l2, loc="upper right")
 
-    # 5) Merge und Plot
-    merged = stock_df.join(trends_weekly[["Trend_Average", "Trend_Smoothed"]], how="inner")
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(merged.index, merged["Close"], label=f"{ticker} Schlusskurs")
-    plt.plot(merged.index, merged["Trend_Average"], "--", label="Trend Average")
-    plt.plot(merged.index, merged["Trend_Smoothed"], ":", label="Trend Smoothed")
-    plt.title(f"{ticker}: Wöchentliche Kurse vs. Trends")
-    plt.xlabel("Datum")
-    plt.legend()
+    plt.title(f"{ticker} – Kurs vs. Google Trends (4-Wochen-MA)")
+    fig.tight_layout()
+    plt.grid(alpha=0.3)
     plt.show()

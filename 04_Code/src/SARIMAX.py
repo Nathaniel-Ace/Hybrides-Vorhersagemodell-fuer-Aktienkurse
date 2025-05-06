@@ -39,27 +39,13 @@ for ticker in tickers:
     mape  = np.mean(np.abs((actual - forecast) / actual)) * 100
     r2    = r2_score(actual, forecast)
 
-    # 6) Sharpe-Ratio der prognostizierten wöchentlichen Renditen
-    forecast_ret = forecast.pct_change().dropna()
-    sharpe = forecast_ret.mean() / forecast_ret.std()
-
-    # 7) Hit-Rate (Vorzeichenkorrektheit)
-    actual_ret = actual.pct_change().dropna()
-    forecast_ret = forecast.pct_change().dropna()
-    min_len = min(len(actual_ret), len(forecast_ret))
-    hitrate = np.mean(
-        np.sign(actual_ret[-min_len:].values) == np.sign(forecast_ret[-min_len:].values)
-    ) * 100
-
-    # 8) Ergebnisse speichern
+    # 6) Ergebnisse speichern
     results.append({
         "Ticker": ticker,
         "RMSE":   rmse,
         "MAE":    mae,
         "MAPE_%": mape,
-        "R2":     r2,
-        "HitRate": hitrate,
-        "Sharpe": sharpe
+        "R2":     r2
     })
 
     # 9) Einzel-Ausgabe
@@ -68,8 +54,6 @@ for ticker in tickers:
     print(f"  MAE        = {mae:.4f}")
     print(f"  MAPE       = {mape:.2f}%")
     print(f"  R²         = {r2:.4f}")
-    print(f"  Hit-Rate   = {hitrate:.2f}%")
-    print(f"  Sharpe     = {sharpe:.4f}\n")
 
     # 10) Plot: Train / Test / Forecast
     plt.figure(figsize=(12, 5))

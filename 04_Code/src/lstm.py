@@ -86,25 +86,18 @@ for train_idx, test_idx in tscv.split(scaled_data):
     mae   = mean_absolute_error(y_true, y_pred)
     mape  = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
     r2    = r2_score(y_true, y_pred)
-    dir_true   = np.sign(np.diff(y_true))
-    dir_pred   = np.sign(np.diff(y_pred))
-    hit_rate   = (dir_true == dir_pred).mean() * 100
-    pred_rets  = np.diff(y_pred) / y_pred[:-1]
-    sharpe     = pred_rets.mean() / pred_rets.std() if pred_rets.std() != 0 else np.nan
 
     # Speichern
     rmse_list.append(rmse)
     mae_list.append(mae)
     mape_list.append(mape)
     r2_list.append(r2)
-    hit_rate_list.append(hit_rate)
-    sharpe_list.append(sharpe)
     all_y_true.append(y_true)
     all_y_pred.append(y_pred)
 
     # Konsolenausgabe
     print(f"Fold {fold_num} – RMSE={rmse:.4f}, MAE={mae:.4f}, "
-          f"MAPE={mape:.2f}%, R²={r2:.4f}, Hit-Rate={hit_rate:.1f}%, Sharpe={sharpe:.4f}")
+          f"MAPE={mape:.2f}%, R²={r2:.4f}")
     fold_num += 1
 
 # 6) Durchschnitt aller Folds
@@ -113,8 +106,6 @@ print(f"RMSE:     {np.mean(rmse_list):.4f}")
 print(f"MAE:      {np.mean(mae_list):.4f}")
 print(f"MAPE:     {np.mean(mape_list):.4f}%")
 print(f"R²:       {np.mean(r2_list):.4f}")
-print(f"Hit-Rate: {np.mean(hit_rate_list):.4f}%")
-print(f"Sharpe:   {np.nanmean(sharpe_list):.4f}")
 
 # 7) Ein einziger Plot für alle 3 Folds
 plt.figure(figsize=(12, 6))

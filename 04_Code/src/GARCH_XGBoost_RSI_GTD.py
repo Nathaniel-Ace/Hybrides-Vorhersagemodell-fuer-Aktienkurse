@@ -19,9 +19,9 @@ df = pd.read_csv(csv_path, parse_dates=["Date"], index_col="Date").sort_index()
 df["Return"] = np.log(df["Close"] / df["Close"].shift(1))
 df.dropna(inplace=True)
 
-# 2) GARCH auf gesamten Datensatz fitten (einmalig) und Volatilität speichern
-g = arch_model(df["Return"] * 10, mean="Zero", vol="GARCH", p=1, q=1,
-               dist="normal", rescale=False)
+# 2) GARCH auf gesamten Datensatz einmalig fitten und Volatilität speichern
+g      = arch_model(df["Return"] * 10, mean="Zero", vol="GARCH", p=1, q=1,
+                    dist="normal", rescale=False)
 res_all = g.fit(disp="off")
 df["GARCH_vol"] = res_all.conditional_volatility / 10
 
@@ -49,19 +49,30 @@ X_full, y_full = make_xy(df)
 
 tscv_search = TimeSeriesSplit(n_splits=n_splits)
 param_dist = {
-    "n_estimators":    [50, 100, 200],
-    "max_depth":       [3, 5, 7],
-    "learning_rate":   [0.01, 0.05, 0.1],
-    "subsample":       [0.8, 1.0],
-    "colsample_bytree":[0.8, 1.0],
-    "gamma":           [0, 0.1, 0.5]
+    "n_estimators":     [50, 100, 200],
+    "max_depth":        [3, 5, 7],
+    "learning_rate":    [0.01, 0.05, 0.1],
+    "subsample":        [0.8, 1.0],
+    "colsample_bytree": [0.8, 1.0],
+    "gamma":            [0, 0.1, 0.5]
 }
-xgb = XGBRegressor(random_state=42, tree_method="exact")
+
+# tree_method="hist" für CPU-Training, n_jobs=1 um GPU-Parallelität auszuschließen
+xgb = XGBRegressor(
+    random_state=42,
+    tree_method="hist",
+    n_jobs=1
+)
+
 search = RandomizedSearchCV(
-    xgb, param_dist,
-    n_iter=20, cv=tscv_search,
+    xgb,
+    param_dist,
+    n_iter=20,
+    cv=tscv_search,
     scoring="neg_root_mean_squared_error",
-    n_jobs=-1, random_state=42, verbose=1,
+    n_jobs=1,            # nur ein Job, um CUDA-Konflikte zu vermeiden
+    random_state=42,
+    verbose=1,
     error_score='raise'
 )
 search.fit(X_full, y_full)
@@ -75,7 +86,7 @@ hit_ret, sharpe_ret               = [], []
 rmse_prc, mae_prc, mape_prc, r2_prc = [], [], [], []
 hit_prc, sharpe_prc               = [], []
 
-last_fold = {}
+fold_results = []  # für Plots aller Folds
 
 for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
     train_df = df.iloc[tr_idx].copy()
@@ -94,11 +105,12 @@ for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
     X_test,  y_test  = make_xy(test_df)
     print(f"Fold {fold}: X_train={X_train.shape}, X_test={X_test.shape}")
 
-    # d) Model trainieren mit Early Stopping
+    # d) Model trainieren mit Early Stopping (ebenfalls CPU-hist)
     model = XGBRegressor(
         **best_params,
         random_state=42,
         tree_method="hist",
+        n_jobs=1,
         early_stopping_rounds=10,
         verbosity=0
     )
@@ -131,10 +143,11 @@ for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
         p0 = test_df["Close"].iat[i + window_size - 1]
         preds.append(p0 * np.exp(r))
         actuals.append(test_df["Close"].iat[i + window_size])
-    preds = np.array(preds); actuals = np.array(actuals)
+    preds   = np.array(preds)
+    actuals = np.array(actuals)
 
-    rm_p = math.sqrt(mean_squared_error(actuals, preds))
-    ma_p = mean_absolute_error(actuals, preds)
+    rm_p  = math.sqrt(mean_squared_error(actuals, preds))
+    ma_p  = mean_absolute_error(actuals, preds)
     mask_p = actuals != 0
     mp_p = np.mean(np.abs((actuals[mask_p] - preds[mask_p]) / actuals[mask_p])) * 100
     r2_p = r2_score(actuals, preds)
@@ -154,16 +167,16 @@ for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), start=1):
     print(f"  Prices  → RMSE={rm_p:.4f}, MAE={ma_p:.4f}, MAPE={mp_p:.2f}%, "
           f"R²={r2_p:.4f}, Hit-Rate={hr_p:.1f}%, Sharpe={sr_p:.4f}\n")
 
-    if fold == n_splits:
-        last_fold = {
-            "idx":    test_df.index[window_size:],
-            "y_test": y_test,
-            "y_pred": y_pred,
-            "actual": actuals,
-            "preds":  preds
-        }
+    # Ergebnisse für spätere Plots speichern
+    fold_results.append({
+        "idx":    test_df.index[window_size:],
+        "y_test": y_test,
+        "y_pred": y_pred,
+        "actual": actuals,
+        "preds":  preds
+    })
 
-# 7) Durchschnittsergebnisse
+# 7) Durchschnittsergebnisse ausgeben
 print("\n=== Durchschnittliche Metriken: Log-Renditen ===")
 print(f"RMSE    = {np.mean(rmse_ret):.4f}")
 print(f"MAE     = {np.mean(mae_ret):.4f}")
@@ -180,18 +193,22 @@ print(f"R²      = {np.mean(r2_prc):.4f}")
 print(f"HitRate = {np.mean(hit_prc):.2f}%")
 print(f"Sharpe  = {np.nanmean(sharpe_prc):.4f}")
 
-# 8) Plots für den letzten Fold
-if last_fold:
-    idx = last_fold["idx"]
+# 8) Plots für alle Folds
 
-    plt.figure(figsize=(12,5))
-    plt.plot(idx, last_fold["y_test"],  label="Real Log-Renditen")
-    plt.plot(idx, last_fold["y_pred"], "--", label="Pred Log-Renditen", alpha=0.7)
-    plt.title(f"{ticker} – Fold {n_splits} Log-Renditen")
-    plt.xlabel("Datum"); plt.ylabel("Log-Rendite"); plt.legend(); plt.show()
+# a) Log-Renditen über alle Folds
+plt.figure(figsize=(12, 5))
+for i, fr in enumerate(fold_results, start=1):
+    plt.plot(fr["idx"], fr["y_test"],  label=f"Real Ret Fold {i}",  alpha=0.7)
+    plt.plot(fr["idx"], fr["y_pred"], "--",               label=f"Pred Ret Fold {i}", alpha=0.7)
+plt.title(f"{ticker} – Log-Renditen über alle {n_splits} Folds")
+plt.xlabel("Datum"); plt.ylabel("Log-Rendite")
+plt.legend(); plt.tight_layout(); plt.show()
 
-    plt.figure(figsize=(12,5))
-    plt.plot(idx, last_fold["actual"], label="Real Close")
-    plt.plot(idx, last_fold["preds"],  "--", label="Pred Close", alpha=0.7)
-    plt.title(f"{ticker} – Fold {n_splits} Aktienkurse")
-    plt.xlabel("Datum"); plt.ylabel("Preis (Close)"); plt.legend(); plt.show()
+# b) Close-Preise über alle Folds
+plt.figure(figsize=(12, 5))
+for i, fr in enumerate(fold_results, start=1):
+    plt.plot(fr["idx"], fr["actual"], label=f"Real Price Fold {i}", alpha=0.7)
+    plt.plot(fr["idx"], fr["preds"],  "--",               label=f"Pred Price Fold {i}", alpha=0.7)
+plt.title(f"{ticker} – Close-Preise über alle {n_splits} Folds")
+plt.xlabel("Datum"); plt.ylabel("Preis (Close)")
+plt.legend(); plt.tight_layout(); plt.show()

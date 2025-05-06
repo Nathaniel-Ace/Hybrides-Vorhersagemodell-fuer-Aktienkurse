@@ -7,7 +7,7 @@ import math
 from xgboost import XGBRegressor
 
 # 1) CSV laden und Daten vorbereiten
-ticker = "MSFT"
+ticker = "NVDA"
 df = pd.read_csv(
     f"../../03_Daten/processed_data/historical_stock_data_weekly_{ticker}_flat.csv",
     parse_dates=["Date"], index_col="Date"
@@ -74,31 +74,18 @@ for train_idx, test_idx in tscv.split(values):
     mape  = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
     r2    = r2_score(y_test, y_pred)
 
-    # Hit-Rate (Richtungstreffer)
-    dir_true = np.sign(np.diff(y_test))
-    dir_pred = np.sign(np.diff(y_pred))
-    hit_rate = (dir_true == dir_pred).mean() * 100
-
-    # Sharpe-Ratio auf prognostizierten Renditen
-    pred_returns = np.diff(y_pred) / y_pred[:-1]
-    sharpe = pred_returns.mean() / pred_returns.std() if pred_returns.std() != 0 else np.nan
-
     # Ergebnisse sammeln
     rmse_list.append(rmse)
     mae_list.append(mae)
     mape_list.append(mape)
     r2_list.append(r2)
-    hit_rate_list.append(hit_rate)
-    sharpe_list.append(sharpe)
 
     # Konsolenausgabe pro Fold
     print(f"Fold {fold_num} – "
           f"RMSE={rmse:.4f}, "
           f"MAE={mae:.4f}, "
           f"MAPE={mape:.2f}%, "
-          f"R²={r2:.4f}, "
-          f"Hit-Rate={hit_rate:.1f}%, "
-          f"Sharpe={sharpe:.4f}\n")
+          f"R²={r2:.4f}")
     fold_num += 1
 
 # 6) Durchschnitt über alle Folds
@@ -107,10 +94,8 @@ print(f"RMSE:       {np.mean(rmse_list):.4f}")
 print(f"MAE:        {np.mean(mae_list):.4f}")
 print(f"MAPE:       {np.mean(mape_list):.4f}%")
 print(f"R²:         {np.mean(r2_list):.4f}")
-print(f"Hit-Rate:   {np.mean(hit_rate_list):.4f}%")
-print(f"Sharpe:     {np.nanmean(sharpe_list):.4f}")
 
-# 7) EIN EINZIGER Plot für alle 3 Folds
+# 7) Plot für alle 3 Folds
 plt.figure(figsize=(12, 6))
 for i in range(n_splits):
     plt.plot(all_dates[i], all_y_true[i],

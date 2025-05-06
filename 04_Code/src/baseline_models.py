@@ -29,13 +29,6 @@ for ticker in tickers:
     mae_naive  = mean_absolute_error(y_true, y_pred_naive)
     mape_naive = np.mean(np.abs((y_true - y_pred_naive) / y_true)) * 100
     r2_naive   = r2_score(y_true, y_pred_naive)
-    # Hit-Rate
-    direction_true = np.sign(y_true.diff().dropna())
-    direction_pred = np.sign(y_pred_naive.diff().dropna())
-    hit_rate_naive = (direction_true == direction_pred).mean() * 100
-    # Sharpe-Ratio auf prognostizierten wöchentlichen Renditen
-    pred_ret_naive = y_pred_naive.pct_change().dropna()
-    sharpe_naive = pred_ret_naive.mean() / pred_ret_naive.std()
 
     # --- ARIMA(1,1,1) ---
     arima = ARIMA(train["Close"], order=(1,1,1)).fit()
@@ -49,29 +42,19 @@ for ticker in tickers:
     mae_arima  = mean_absolute_error(y_true_arima, y_pred_arima)
     mape_arima = np.mean(np.abs((y_true_arima - y_pred_arima) / y_true_arima)) * 100
     r2_arima   = r2_score(y_true_arima, y_pred_arima)
-    direction_true_arima = np.sign(y_true_arima.diff().dropna())
-    direction_pred_arima = np.sign(y_pred_arima.diff().dropna())
-    hit_rate_arima = (direction_true_arima == direction_pred_arima).mean() * 100
-    # Sharpe-Ratio
-    pred_ret_arima = y_pred_arima.pct_change().dropna()
-    sharpe_arima = pred_ret_arima.mean() / pred_ret_arima.std()
 
     print(f"=== Basismodell für {ticker} ===")
     print(f"Naives Modell:    RMSE={rmse_naive:.4f}, MAE={mae_naive:.4f}, "
-          f"MAPE={mape_naive:.2f}%, R²={r2_naive:.4f}, Hit-Rate={hit_rate_naive:.1f}%, "
-          f"Sharpe={sharpe_naive:.4f}")
+          f"MAPE={mape_naive:.2f}%, R²={r2_naive:.4f}")
     print(f"ARIMA(1,1,1):     RMSE={rmse_arima:.4f}, MAE={mae_arima:.4f}, "
-          f"MAPE={mape_arima:.2f}%, R²={r2_arima:.4f}, Hit-Rate={hit_rate_arima:.1f}%, "
-          f"Sharpe={sharpe_arima:.4f}\n")
+          f"MAPE={mape_arima:.2f}%, R²={r2_arima:.4f}")
 
     results_baseline.append({
         "Ticker": ticker,
         "RMSE_Naive": rmse_naive,    "MAE_Naive": mae_naive,
         "MAPE_Naive": mape_naive,    "R2_Naive": r2_naive,
-        "HitRate_Naive": hit_rate_naive, "Sharpe_Naive": sharpe_naive,
         "RMSE_ARIMA": rmse_arima,    "MAE_ARIMA": mae_arima,
-        "MAPE_ARIMA": mape_arima,    "R2_ARIMA": r2_arima,
-        "HitRate_ARIMA": hit_rate_arima, "Sharpe_ARIMA": sharpe_arima
+        "MAPE_ARIMA": mape_arima,    "R2_ARIMA": r2_arima
     })
 
     # --- Plot ---
@@ -97,4 +80,4 @@ for ticker in tickers:
 # Zusammenfassung
 df_summary = pd.DataFrame(results_baseline)
 print("\n=== Zusammenfassung Basismodelle ===")
-display(df_summary)
+print(df_summary)

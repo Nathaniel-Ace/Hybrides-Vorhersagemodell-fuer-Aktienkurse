@@ -154,8 +154,8 @@ for fold, (tr_idx, te_idx) in enumerate(tscv.split(df), 1):
     metrics["hit_prc"].append(hit_prc)
     metrics["sharpe_prc"].append(sharpe_prc)
     print(f"Fold {fold}:\n"
-          f"  Returns → RMSE={rm_ret:.4f}, MAE={mae_ret:.4f}, MAPE={mape_ret:.2f}%, R2={r2_ret:.4f}, Hit-Rate={hit_ret:.1f}%, Sharpe={sharpe_ret:.4f}\n"
-          f"  Prices  → RMSE={rm_prc:.4f}, MAE={mae_prc:.4f}, MAPE={mape_prc:.2f}%, R2={r2_prc:.4f}, Hit-Rate={hit_prc:.1f}%, Sharpe={sharpe_prc:.4f}")
+          f"  Returns → RMSE={rm_ret:.4f}, MAE={mae_ret:.4f}, MAPE={mape_ret:.4f}%, R2={r2_ret:.4f}, Hit-Rate={hit_ret:.4f}%, Sharpe={sharpe_ret:.4f}\n"
+          f"  Prices  → RMSE={rm_prc:.4f}, MAE={mae_prc:.4f}, MAPE={mape_prc:.4f}%, R2={r2_prc:.4f}, Hit-Rate={hit_prc:.4f}%, Sharpe={sharpe_prc:.4f}")
     fold_results.append({"idx":test_df.index[window_size:], "y_test":y_ts, "y_pred":y_pred,
                          "actuals":actuals, "preds":preds})
 
@@ -179,17 +179,17 @@ avg_sharpe_prc = np.nanmean(metrics["sharpe_prc"])
 print("\n=== Durchschnittliche Metriken: Log-Renditen ===")
 print(f"RMSE      = {avg_rmse_ret:.4f}")
 print(f"MAE       = {avg_mae_ret:.4f}")
-print(f"MAPE      = {avg_mape_ret:,.2f}%")
+print(f"MAPE      = {avg_mape_ret:,.4f}%")
 print(f"R²        = {avg_r2_ret:.4f}")
-print(f"HitRate   = {avg_hit_ret:.2f}%")
+print(f"HitRate   = {avg_hit_ret:.4f}%")
 print(f"Sharpe    = {avg_sharpe_ret:.4f}")
 
 print("\n=== Durchschnittliche Metriken: Preise ===")
 print(f"RMSE      = {avg_rmse_prc:.4f}")
 print(f"MAE       = {avg_mae_prc:.4f}")
-print(f"MAPE      = {avg_mape_prc:.2f}%")
+print(f"MAPE      = {avg_mape_prc:.4f}%")
 print(f"R²        = {avg_r2_prc:.4f}")
-print(f"HitRate   = {avg_hit_prc:.2f}%")
+print(f"HitRate   = {avg_hit_prc:.4f}%")
 print(f"Sharpe    = {avg_sharpe_prc:.4f}")
 
 # 8) Plots: Log-Renditen & Preise über alle Folds
