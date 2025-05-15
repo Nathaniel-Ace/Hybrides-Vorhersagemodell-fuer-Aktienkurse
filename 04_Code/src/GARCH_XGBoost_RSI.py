@@ -8,7 +8,7 @@ from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # Einstellungen
-ticker      = "GOOG"
+ticker      = "NVDA"
 window_size = 10
 n_splits    = 3
 csv_path    = f"../../03_Daten/processed_data/historical_stock_data_weekly_{ticker}_flat_with_RSI.csv"
@@ -180,3 +180,30 @@ for i in range(n_splits):
 plt.title(f"{ticker} – Close-Preise alle {n_splits} Folds")
 plt.xlabel("Datum"); plt.ylabel("Preis (Close)")
 plt.legend(); plt.tight_layout(); plt.show()
+
+from joblib import dump
+
+# 9) Finales Modell auf allen historischen Daten trainieren
+model_final = XGBRegressor(**best_params, random_state=42, tree_method="hist")
+model_final.fit(X_full, y_full)
+
+# 10) Vorhersage auf Trainingsdaten
+y_full_pred = model_final.predict(X_full)
+
+# RMSE Log-Rendite (Training)
+rmse_ret_full = math.sqrt(mean_squared_error(y_full, y_full_pred))
+print(f"\n📈 RMSE (Renditeebene) auf Trainingsdaten: {rmse_ret_full:.4f}")
+
+# Preis-Rückrechnung
+start_prices = df["Close"].iloc[window_size - 1 : -1].values
+true_prices  = df["Close"].iloc[window_size:].values
+pred_prices  = start_prices * np.exp(y_full_pred)
+
+# RMSE Preis (Training)
+rmse_prc_full = math.sqrt(mean_squared_error(true_prices, pred_prices))
+print(f"💰 RMSE (Preisebene) auf Trainingsdaten:  {rmse_prc_full:.4f}")
+
+# 11) Modell speichern
+model_path = f"../../05_Modelle/garch_xgboost_{ticker.lower()}_final_model.joblib"
+dump(model_final, model_path)
+print(f"✅ Modell gespeichert: {model_path}")

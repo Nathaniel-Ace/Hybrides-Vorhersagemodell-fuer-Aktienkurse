@@ -86,6 +86,43 @@ for units in param_grid["units"]:
 print(f"\nBest CV‑RMSE (Log‑Renditen): {best_rmse:.4f}")
 print("Best Config:", best_cfg)
 
+# 5) Finales Modelltraining auf dem gesamten Datensatz
+X_all, y_all = make_xy(df)
+X_all = X_all.reshape((-1, X_all.shape[1], 1))
+
+model = Sequential([
+    Input(shape=(X_all.shape[1], 1)),
+    LSTM(best_cfg["units"], return_sequences=True),
+    Dropout(best_cfg["dropout"]),
+    LSTM(best_cfg["units"]),
+    Dropout(best_cfg["dropout"]),
+    Dense(1)
+])
+model.compile(optimizer=tf.keras.optimizers.Adam(best_cfg["lr"]), loss="mse")
+model.fit(X_all, y_all, epochs=20, batch_size=best_cfg["batch_size"], verbose=1)
+
+# Modellperformance auf Trainingdaten berechnen
+y_pred_all = model.predict(X_all).flatten()
+
+# RMSE auf Renditeebene (Train)
+rmse_ret_all = math.sqrt(mean_squared_error(y_all, y_pred_all))
+print(f"\n📈 RMSE (Renditeebene) auf Trainingsdaten: {rmse_ret_all:.4f}")
+
+# RMSE auf Preisebene rekonstruieren
+# Schritt 1: Startpreis
+start_prices = df["Close"].iloc[window_size - 1 : -1].values
+true_prices = df["Close"].iloc[window_size:].values
+pred_prices = start_prices * np.exp(y_pred_all)
+
+# Schritt 2: RMSE auf Preisbasis
+rmse_prc_all = math.sqrt(mean_squared_error(true_prices, pred_prices))
+print(f"💰 RMSE (Preisebene) auf Trainingsdaten:  {rmse_prc_all:.4f}")
+
+# Modell speichern
+model.save("../../05_Modelle/garch_lstm_nvda_final_model.keras")
+print("✅ Finales Modell gespeichert")
+
+
 # 6) Endgültiges Training & Metriken pro Fold ausgeben
 metrics = {"rmse_ret":[],"mae_ret":[],"mape_ret":[],"r2_ret":[],"hit_ret":[],"sharpe_ret":[],
            "rmse_prc":[],"mae_prc":[],"mape_prc":[],"r2_prc":[],"hit_prc":[],"sharpe_prc":[]}

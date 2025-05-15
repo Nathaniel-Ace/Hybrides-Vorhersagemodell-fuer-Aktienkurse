@@ -1,14 +1,14 @@
 import time
 from pytrends.request import TrendReq
 
-start_date = "2023-01-01"
-end_date = "2025-04-26"
+start_date = "2025-04-14"
+end_date = "2025-05-14"
 timeframe_str = f"{start_date} {end_date}"
 
 ticker_keywords = {
-    "NVDA": ["NVIDIA stock", "sell NVIDIA stock", "buy NVIDIA stock"],
+    #"NVDA": ["NVIDIA stock", "sell NVIDIA stock", "buy NVIDIA stock"],
     "GOOG": ["Google stock", "sell Google stock", "buy Google stock"],
-    "MSFT": ["Microsoft stock", "sell Microsoft stock", "buy Microsoft stock"]
+    #"MSFT": ["Microsoft stock", "sell Microsoft stock", "buy Microsoft stock"]
 }
 
 # Erstellen einer pytrends-Instanz
@@ -63,6 +63,6 @@ for ticker, keywords in ticker_keywords.items():
     print(df_all.head())
 
     # kombiniertes DataFrame als CSV speichern
-    output_filename = f"../../03_Daten/raw_data/google_trends_weekly_{ticker}_2023-2025.csv"
+    output_filename = f"../../03_Daten/raw_data/google_trends_daily_{ticker}_last30d.csv"
     df_all.to_csv(output_filename)
     print(f"Google Trends Daten für {ticker} wurden in '{output_filename}' gespeichert.")
