@@ -7,7 +7,8 @@ from sklearn.metrics import mean_squared_error
 from tensorflow.keras.models import load_model
 
 # 1) Daten laden und auf die letzten 30 Tage beschränken
-df = pd.read_csv("../../03_Daten/processed_data/historical_stock_data_daily_NVDA_last60d_flat_with_RSI.csv", parse_dates=["Date"])
+ticker = "MSFT"
+df = pd.read_csv(f"../../03_Daten/processed_data/historical_stock_data_daily_{ticker}_last60d_flat_with_RSI.csv", parse_dates=["Date"])
 df = df.sort_values("Date").set_index("Date")
 df = df.last("30D").copy()
 
@@ -39,7 +40,7 @@ X_test, y_test = make_xy(df)
 X_test = X_test.reshape((-1, X_test.shape[1], 1))
 
 # 5) Modell laden und Vorhersage durchführen
-model = load_model("../../05_Modelle/garch_lstm_nvda_final_model.keras")
+model = load_model(f"../../05_Modelle/garch_lstm_{ticker.lower()}_final_model.keras")
 y_pred = model.predict(X_test).flatten()
 
 # 6) RMSE berechnen

@@ -12,7 +12,7 @@ from tensorflow.keras.layers import Input, LSTM, Dropout, Dense
 from tensorflow.keras.callbacks import EarlyStopping
 
 # Einstellungen
-ticker      = "NVDA"
+ticker      = "MSFT"
 window_size = 10
 n_splits    = 3
 csv_path    = f"../../03_Daten/processed_data/historical_stock_data_weekly_{ticker}_flat_with_RSI.csv"
@@ -119,7 +119,7 @@ rmse_prc_all = math.sqrt(mean_squared_error(true_prices, pred_prices))
 print(f"💰 RMSE (Preisebene) auf Trainingsdaten:  {rmse_prc_all:.4f}")
 
 # Modell speichern
-model.save("../../05_Modelle/garch_lstm_nvda_final_model.keras")
+model.save(f"../../05_Modelle/garch_lstm_{ticker.lower()}_final_model.keras")
 print("✅ Finales Modell gespeichert")
 
 

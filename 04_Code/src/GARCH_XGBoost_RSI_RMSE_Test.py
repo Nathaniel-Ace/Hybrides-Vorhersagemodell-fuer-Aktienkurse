@@ -6,7 +6,7 @@ import pandas as pd
 import math
 
 # Parameter
-ticker = "NVDA"
+ticker = "MSFT"
 window_size = 10
 model_path = f"../../05_Modelle/garch_xgboost_{ticker.lower()}_final_model.joblib"
 csv_path = f"../../03_Daten/processed_data/historical_stock_data_daily_{ticker}_last60d_flat_with_RSI.csv"

@@ -8,7 +8,7 @@ from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 # Einstellungen
-ticker      = "NVDA"
+ticker      = "MSFT"
 window_size = 10
 n_splits    = 3
 csv_path    = f"../../03_Daten/processed_data/historical_stock_data_weekly_{ticker}_flat_with_RSI.csv"
