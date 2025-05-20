@@ -2,12 +2,12 @@ import datetime
 import yfinance as yf
 import time
 
-# === Zeitraum: letzte 30 Tage ===
+# Zeitraum: letzte 30 Tage
 today = datetime.date.today()
 start_date = today - datetime.timedelta(days=60)
 end_date = today
 
-# === Aktienkurse (täglich) ===
+# Aktienkurse (täglich)
 tickers = ["NVDA", "GOOG", "MSFT"]
 for ticker in tickers:
     df = yf.download(ticker, start=start_date, end=end_date, interval="1d", auto_adjust=True)
