@@ -2,7 +2,7 @@
 
 Dieses Repository enthält alle relevanten Dateien und Informationen zur Bachelorarbeit mit dem Titel:
 
-**„Ein hybrider Ansatz zur Aktienkursprognose: Kombination von Machine Learning und Google Trends für NVIDIA, Google und Microsoft“**
+**„Prognose von Aktienrenditen mit hybriden GARCH-Deep-Learning-Modellen: Eine vergleichende Analyse klassischer und moderner Verfahren“**
 
 ---
 
