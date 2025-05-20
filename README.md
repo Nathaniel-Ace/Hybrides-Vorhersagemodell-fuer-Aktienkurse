@@ -28,7 +28,7 @@ Traditionelle Modelle zur Aktienkursprognose basieren meist ausschließlich auf 
 - **Fehlende externe Einflussfaktoren:** Klassische Modelle integrieren keine zusätzlichen Daten, die das Investorenverhalten oder Markttrends widerspiegeln.
 - **Begrenzte Mustererkennung:** Lineare Modelle können oft keine komplexen, nichtlinearen Zusammenhänge erfassen.
 
-Die Einbindung von Google Trends-Daten soll als Frühindikator für Kursbewegungen dienen und eine dynamische Anpassung der Prognosen ermöglichen. Zusätzlich wird Explainable AI (XAI) in Form von SHAP-Werten verwendet, um die Relevanz der einzelnen Merkmale transparent zu machen.
+Die Einbindung von Google Trends-Daten soll als Frühindikator für Kursbewegungen dienen und eine dynamische Anpassung der Prognosen ermöglichen.
 
 ---
 
