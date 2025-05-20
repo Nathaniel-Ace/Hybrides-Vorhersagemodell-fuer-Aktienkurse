@@ -9,7 +9,7 @@ Dieses Repository enthält alle relevanten Dateien und Informationen zur Bachelo
 ## Autor und Betreuung
 
 - **Autor:** Nathaniel Ace Panganiban  
-- **Matrikelnummer:** 2210257040  
+- **Matrikelnummer:** 52201846  
 - **Betreuer:** Christian Brandstätter  
 - **Studiengang:** Informatik / Computer Science  
 - **Datum:** Wien, 18.02.2025
